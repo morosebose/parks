@@ -188,15 +188,16 @@ class MainWindow(tk.Tk) :
     def goToChosenDirectory(self) :
         '''
         Let the user navigate to the directory for JSON data.
-        If the user cancels or closes the navigation window without choosing 
-        a directory, let the raised FileNotFoundError caught by the caller.
-        Otherwise, call the method to write out the data to JSON.
+        - If the user cancels or closes the navigation window without choosing 
+          a directory, let the raised FileNotFoundError caught by the caller.
+        - Otherwise, call the method to write out the data to JSON.
         '''
         tkmb.showinfo('Choose Directory', 'Choose a directory for the park data files', parent = self)
         directory = tk.filedialog.askdirectory(initialdir = '.')
         chosen_dir = os.path.join(directory)
         os.chdir(chosen_dir)
         self.writeFile()
+    
     
     def writeFile(self) :
         '''
@@ -227,7 +228,6 @@ class MainWindow(tk.Tk) :
             self.destroy()
             self.quit()
             
-
         
 if __name__ == '__main__' :
     MainWindow().mainloop()
