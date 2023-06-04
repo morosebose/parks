@@ -7,22 +7,55 @@ Lab 4 Single Thread
 import requests
 import tkinter as tk
 import tkinter.messagebox as tkmb
+import tkinter.filedialog
 import json
+from collections import defaultdict
+import os
 
 class MainWindow(tk.Tk) :
     
-    # Class attributes
+    ### Class attributes
+    # Where to download parks data
     ENDPOINT = 'https://developer.nps.gov/api/v1/parks'
+    # Authentication
     API_KEY = 'npVAOGK1AASuoK9zENNclrb7dVZ7DYynBwp3UkYL'
+    # How many states user can choose
     CHOICE_NUM = 5
     
     def __init__(self) :
+        '''
+        Construct the main window with all necessary widgets.
+        This window is open throughout, and changes depending on execution flow.
+        
+        Some widgets are configurable by other methods, 
+        and so those widgets are instance attributes:
+            - middle label 
+            - listbox
+            - button
+            - bottom label
+        
+        Other instance attributes:
+            states_abbrs, dictionary mapping postal abbreviations to state names
+            chosen_states, the states chosen by the user
+            parks_data, with the info about all the parks in the chosen states
+            chosen_parks, with the info for the specific parks chosen by the user  
+        '''
         super().__init__()
         self.title('US NPS')
         
-        # TODO: try/except
-        with open('states_hash.json', 'r') as sh :
-            self.state_data = json.load(sh)
+        try :
+            with open('states_hash.json', 'r') as sh :
+                self.state_abbrs = json.load(sh)
+        except IOError :
+            tkmb.showerror('Error', '''Cannot open states_hash.json. 
+                    Please check the file name and path and try again.
+                    ''', parent = self)
+            self.destroy()
+            self.quit()
+        
+        self.chosen_states = []
+        self.parks_data = {}
+        self.chosen_parks = defaultdict(list)
         
         top_label = tk.Label(self, text = 'National Park Finder', font = ('Helvetica', 16, 'bold'))
         top_label.grid(row = 0, column = 1, pady = 10)
@@ -34,83 +67,153 @@ class MainWindow(tk.Tk) :
         sb = tk.Scrollbar(frame, orient = 'vertical')
         self.lb = tk.Listbox(frame, height = 10, width = 35, selectmode = 'multiple', yscrollcommand = sb.set)
         sb.config(command = self.lb.yview)
-        for val in self.state_data.values() :
+        for val in self.state_abbrs.values() :
             self.lb.insert(tk.END, val)
         self.lb.grid(row = 0, column = 0)
         sb.grid(row = 0, column = 1, sticky = 'NS')
         
         frame.grid(row = 2, column = 0, columnspan = 3, padx = 10, pady = 10)
         
-        self.btn = tk.Button(self, text = 'Submit Choice', command = self.validateAndProceed)
+        self.btn = tk.Button(self, text = 'Submit Choice', command = self.getValidStateChoice)
         self.btn.grid(row = 3, column = 1, padx = 5, pady = 5)
         
         self.btm_label = tk.Label(self, text = '')
         self.btm_label.grid(row = 4, column = 1, pady = 5)
-        self.chosen_states = []
+
     
-    def validateAndProceed(self) :
+    def getValidStateChoice(self) :
+        '''
+        Allow the user to choose up to CHOICE_NUM states.
+        If user makes a valid number of choices, call method to get park data.
+        Otherwise, show error message and wait for user to pick again.
+        '''
         indices = self.lb.curselection()
         if 1 <= len(indices) <= MainWindow.CHOICE_NUM :
-            for num, key in enumerate(self.state_data.keys()) :
+            for num, key in enumerate(self.state_abbrs.keys()) :
                 if num in indices :
                     self.chosen_states.append(key)
-            info = self.getParksInfo()
-            self.showParkNames(info)
+            self.getParksData()
         else :
             tkmb.showerror('Error', 'Please choose at least 1 and no more than 5 states', parent = self)
             self.lb.selection_clear(0, tk.END)          
 
 
-    def getParksInfo(self) :
+    def getParksData(self) :
         '''
-        Parks info requested by user is stored in the following data structure:
+        Download and save the data for alll the parks in the states chosen by the user.
+        
+        Parks info for the selected states is stored in the following data structure:
             - A dictionary where the key is the states
             - The value is a nested dictionary where the key is the park name
-            - the value is a dictionary where the keys are the labels for park info such as full name
-            - the values are the actual info
+            - The value is a dictionary where the keys are the labels for park info such as full name
+            - The values are the actual info:
+                - the park's full name
+                - a description of the park
+                - a string that specifies the activities available in the park
+                - the url of the park.
         So the data structure is a dictionary of dictionaries of dictionaries.
-        This structure is needed for writing out JSON. 
-        Could have a dictionary of lists of dictionaries but I prefer this?
+        
+        After fetching the data, call the method to allow user to choose specific parks.
         '''
         self.btm_label.config(text = f'Displaying parks in {len(self.chosen_states)} states')
-        parks_data = {}
         for state in self.chosen_states : 
-            state_name = self.state_data[state]
-            parks_data[state_name] = []
+            state_name = self.state_abbrs[state]
+            self.parks_data[state_name] = {}
             data = requests.get(MainWindow.ENDPOINT, params = {'stateCode' : state, 'api_key' : MainWindow.API_KEY}).json()['data']
             for park in data :
                 park_name = park['name']
-                parks_data[state_name][park_name] = {}
+                self.parks_data[state_name][park_name] = {}
                 park_activities = []
                 for activity in park['activities'] :
                     park_activities.append(activity['name'])
-                parks_data[state_name][park_name]['full name'] = park['fullName'] 
-                parks_data[state_name][park_name]['description'] = park['description'] 
-                parks_data[state_name][park_name]['activities'] = park_activities
-                parks_data[state_name][park_name]['url'] = park['url']         
-        return parks_data
-    
-    
-    def showParkNames(self, info) :
+                self.parks_data[state_name][park_name]['full name'] = park['fullName'] 
+                self.parks_data[state_name][park_name]['description'] = park['description'] 
+                self.parks_data[state_name][park_name]['activities'] = ', '.join(park_activities)
+                self.parks_data[state_name][park_name]['url'] = park['url']  
+        self.getChosenParks()
+        
+
+    def getChosenParks(self) :
+        '''
+        Update window display to show the list of parks.
+        Allow user to choose parks.
+        Call the method to get the data for just the chosen parks.
+        '''
         self.mid_label.config(text = 'Select parks to save park info to file')
         self.lb.delete(0, tk.END)
         parks_list = []
-        for k in info.keys():
-            for key in info[k].keys() :
+        for k in self.parks_data.keys():
+            for key in self.parks_data[k].keys() :
                 tup = (k, key)
                 parks_list.append(tup)
                 self.lb.insert(tk.END, f'{tup[0]}: {tup[1]}')
-        self.btn.config(text = 'Save', command = lambda: self.validateAndEnd(parks_list))
+            self.btn.config(text = 'Save', command = lambda: self.getChosenParksData(parks_list))
     
-    def validateAndEnd(self, parks_list):
+  
+    def getChosenParksData(self, parks_list) :
+        '''
+        Save a data structure of just the user's chosen parks.
+        
+        The data structure is a dictionary where the keys are state names.
+        The values are lists of dictionaries.
+        Each dictionary in the list has one key-value pair.
+        The key is the park's name, the value the data such as full name etc.
+        
+        After creating the data structure, call the method to let the user
+        choose the directory where this data will be written out in JSON form.
+        
+        @param parks_list a list of tuples where the first value in each tuple 
+        is the state name, the second the park name.
+        '''
         indices = self.lb.curselection()
         if indices:
-            for state in self.chosen_states :
+            chosen_tups = [parks_list[ind] for ind in indices]
+            for abbr in self.chosen_states :
+                name = self.state_abbrs[abbr]
+                parks = [tup[1] for tup in chosen_tups if tup[0] == name]
+                for park in self.parks_data[name] :
+                    if park in parks:
+                        this_park = {}
+                        this_park[park] = self.parks_data[name][park]
+                        self.chosen_parks[name].append(this_park)
+            try :
+                self.goToChosenDirectory()
+            except FileNotFoundError :
+                self.lb.selection_clear(0, tk.END)
+        else:
+            tkmb.showerror('Error', 'Please choose at least one park', parent = self)
                 
-                
-        else: 
-            tkmb.showerror('Error', 'Please choose at least one park')
     
+    def goToChosenDirectory(self) :
+        '''
+        Let the user navigate to the directory for JSON data.
+        If the user cancels or closes the navigation window without choosing 
+        a directory, let the raised FileNotFoundError caught by the caller.
+        Otherwise, call the method to write out the data to JSON.
+        '''
+        tkmb.showinfo('Choose Directory', 'Choose a directory for the park data files', parent = self)
+        directory = tk.filedialog.askdirectory(initialdir = '.')
+        chosen_dir = os.path.join(directory)
+        os.chdir(chosen_dir)
+        self.writeFile()
+    
+    def writeFile(self) :
+        '''
+        Write out the data for the chosen parks to JSON, one JSON file per state.
+        When done, display window telling user the filenames, then quit.
+        
+        # TODO: try/except
+        '''
+        saved_files = []
+        for state in self.chosen_parks :
+            filename = f'{state}.json'
+            with open (filename, 'w') as fh:
+                json.dump(self.chosen_parks[state], fh, indent = 4)
+                saved_files.append(filename)
+        tkmb.showinfo('Saved', f'Saved files: {", ".join(saved_files)}', parent = self)
+        self.destroy()
+        self.quit()
+
         
 if __name__ == '__main__' :
     MainWindow().mainloop()
