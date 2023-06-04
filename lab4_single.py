@@ -56,6 +56,7 @@ class MainWindow(tk.Tk) :
         self.chosen_states = []
         self.parks_data = {}
         self.chosen_parks = defaultdict(list)
+        self.protocol('WM_DELETE_WINDOW', self.closeout)
         
         top_label = tk.Label(self, text = 'National Park Finder', font = ('Helvetica', 16, 'bold'))
         top_label.grid(row = 0, column = 1, pady = 10)
@@ -65,7 +66,7 @@ class MainWindow(tk.Tk) :
         
         frame = tk.Frame(self)
         sb = tk.Scrollbar(frame, orient = 'vertical')
-        self.lb = tk.Listbox(frame, height = 10, width = 35, selectmode = 'multiple', yscrollcommand = sb.set)
+        self.lb = tk.Listbox(frame, height = 10, width = 50, selectmode = 'multiple', yscrollcommand = sb.set)
         sb.config(command = self.lb.yview)
         for val in self.state_abbrs.values() :
             self.lb.insert(tk.END, val)
@@ -208,11 +209,24 @@ class MainWindow(tk.Tk) :
         for state in self.chosen_parks :
             filename = f'{state}.json'
             with open (filename, 'w') as fh:
-                json.dump(self.chosen_parks[state], fh, indent = 4)
+                json.dump(self.chosen_parks[state], fh, indent = 4, ensure_ascii = False)
                 saved_files.append(filename)
         tkmb.showinfo('Saved', f'Saved files: {", ".join(saved_files)}', parent = self)
         self.destroy()
         self.quit()
+     
+        
+    def closeout(self) :
+        '''
+        Ask for user confirmation before closing main window.
+        - If user confirms, close and quit gracefully
+        - If user cancels, do nothing
+        '''        
+        close = tkmb.askokcancel('Confirm close', 'Close all windows and quit?', parent = self)
+        if close: 
+            self.destroy()
+            self.quit()
+            
 
         
 if __name__ == '__main__' :
