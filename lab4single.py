@@ -102,9 +102,10 @@ class MainWindow(tk.Tk) :
 
     def getParksData(self) :
         '''
-        Download and save the data for all the parks in the states chosen by the user.
-        
-        Parks info for the selected states is stored in the following data structure:
+        Download, parse, and save the data for all the parks in the states chosen by the user.
+        Get info about all national parks in the selected states via call to NPS API.
+        Store parks info for the selected states in the following data structure.
+        The data structure is a dictionary of dictionaries of dictionaries.
             - A dictionary where the key is the states
             - The value is a nested dictionary where the key is the park name
             - The value is a dictionary where the keys are the labels for park info such as full name
@@ -112,30 +113,30 @@ class MainWindow(tk.Tk) :
                 - the park's full name
                 - a description of the park
                 - a string that specifies the activities available in the park
-                - the url of the park.
-        So the data structure is a dictionary of dictionaries of dictionaries.
-        
+                - the url of the park.       
         After fetching the data, call the method to allow user to choose specific parks.
         '''
         self.btm_label.config(text = f'Displaying parks in {len(self.chosen_states)} states')
+        raw_data = {}
         start = time.time()
-        for state in self.chosen_states : 
-            state_name = self.state_abbrs[state]
-            self.parks_data[state_name] = {}
-            data = requests.get(MainWindow.ENDPOINT, params = {'stateCode' : state, 'api_key' : MainWindow.API_KEY}).json()['data']
+        for abbr in self.chosen_states :
+            raw_data[abbr] = requests.get(MainWindow.ENDPOINT, params = {'stateCode' : abbr, 'api_key' : MainWindow.API_KEY}).json()['data']
+        print(f'API download time for {", ".join(self.chosen_states)} using single thread: {time.time() - start:.4f}s')
+        for abbr, data in raw_data.items() :
+            state = self.state_abbrs[abbr]
+            self.parks_data[state] = {}
             for park in data :
                 park_name = park['name']
-                self.parks_data[state_name][park_name] = {}
+                self.parks_data[state][park_name] = {}
                 park_activities = []
                 for activity in park['activities'] :
                     park_activities.append(activity['name'])
-                self.parks_data[state_name][park_name]['full name'] = park['fullName'] 
-                self.parks_data[state_name][park_name]['description'] = park['description'] 
-                self.parks_data[state_name][park_name]['activities'] = ', '.join(park_activities)
-                self.parks_data[state_name][park_name]['url'] = park['url']  
-        print(f'API download time for {", ".join(self.chosen_states)} using single thread: {time.time() - start:.4f}s')
+                self.parks_data[state][park_name]['full name'] = park['fullName'] 
+                self.parks_data[state][park_name]['description'] = park['description'] 
+                self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
+                self.parks_data[state][park_name]['url'] = park['url'] 
         self.getChosenParks()
-        
+            
 
     def getChosenParks(self) :
         '''
