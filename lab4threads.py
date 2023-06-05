@@ -11,6 +11,7 @@ import tkinter.filedialog
 import json
 from collections import defaultdict
 import os
+import threading
 import time
 
 class MainWindow(tk.Tk) :
@@ -118,24 +119,33 @@ class MainWindow(tk.Tk) :
         After fetching the data, call the method to allow user to choose specific parks.
         '''
         self.btm_label.config(text = f'Displaying parks in {len(self.chosen_states)} states')
+        threads = []
         start = time.time()
         for state in self.chosen_states : 
-            state_name = self.state_abbrs[state]
-            self.parks_data[state_name] = {}
-            data = requests.get(MainWindow.ENDPOINT, params = {'stateCode' : state, 'api_key' : MainWindow.API_KEY}).json()['data']
-            for park in data :
-                park_name = park['name']
-                self.parks_data[state_name][park_name] = {}
-                park_activities = []
-                for activity in park['activities'] :
-                    park_activities.append(activity['name'])
-                self.parks_data[state_name][park_name]['full name'] = park['fullName'] 
-                self.parks_data[state_name][park_name]['description'] = park['description'] 
-                self.parks_data[state_name][park_name]['activities'] = ', '.join(park_activities)
-                self.parks_data[state_name][park_name]['url'] = park['url']  
-        print(f'API download time for {", ".join(self.chosen_states)} using single thread: {time.time() - start:.4f}s')
+            t = threading.Thread(target = self.downloadData, args = (state,))
+            threads.append(t)
+            t.start()
+        for t in threads:
+            t.join()
+        print(f'API download time for {", ".join(self.chosen_states)} using threads: {time.time() - start:.4f}s')
         self.getChosenParks()
         
+    
+    def downloadData(self, state) :
+        state_name = self.state_abbrs[state]
+        self.parks_data[state_name] = {}
+        data = requests.get(MainWindow.ENDPOINT, params = {'stateCode' : state, 'api_key' : MainWindow.API_KEY}).json()['data']
+        for park in data :
+            park_name = park['name']
+            self.parks_data[state_name][park_name] = {}
+            park_activities = []
+            for activity in park['activities'] :
+                park_activities.append(activity['name'])
+            self.parks_data[state_name][park_name]['full name'] = park['fullName'] 
+            self.parks_data[state_name][park_name]['description'] = park['description'] 
+            self.parks_data[state_name][park_name]['activities'] = ', '.join(park_activities)
+            self.parks_data[state_name][park_name]['url'] = park['url']  
+    
 
     def getChosenParks(self) :
         '''
