@@ -1,7 +1,7 @@
 '''
 CIS 41B Spring 2023
 Surajit A. Bose
-Lab 4 Multithread
+Lab 4 Multiprocess
 '''
 
 import requests
@@ -11,9 +11,8 @@ import tkinter.filedialog
 import json
 from collections import defaultdict
 import os
-import threading
+import multiprocessing as mp
 import time
-import queue
 
 class MainWindow(tk.Tk) :
     
@@ -81,9 +80,7 @@ class MainWindow(tk.Tk) :
         self.btn = tk.Button(self, text = 'Submit Choice', command = self.getValidStateChoice)
         self.btn.grid(row = 3, column = 1, padx = 5, pady = 5)
         
-        self.btm_text = tk.StringVar()
-        self.btm_text.set('')
-        self.btm_label = tk.Label(self, text = self.btm_text.get())
+        self.btm_label = tk.Label(self, text = '')
         self.btm_label.grid(row = 4, column = 1, pady = 5)
 
     
@@ -120,29 +117,12 @@ class MainWindow(tk.Tk) :
                 - the url of the park.       
         After fetching the data, call the method to allow user to choose specific parks.
         '''
-        self.btm_text.set('Results: ')
-        self.btm_label.config(text = self.btm_text.get())
-        q = queue.Queue()
-        raw_data = {}
-        threads = []
+        self.btm_label.config(text = f'Displaying parks in {len(self.chosen_states)} states')
         start = time.time()
-        for abbr in self.chosen_states : 
-            t = threading.Thread(target = self.downloadData, args = (abbr, raw_data, q))
-            threads.append(t)
-            t.start()
-        
-        for i in range(len(self.chosen_states)) :
-            label_text = self.btm_text.get()
-            qdata = q.get() 
-            state = self.state_abbrs[qdata[0]]
-            total = qdata[1]
-            label_text += (f' {state}: {total} ')
-            self.btm_text.set(label_text)
-            self.btm_label.config(text = self.btm_text.get())
-            
-        for t in threads:
-            t.join()
-        print(f'API download time for {", ".join(self.chosen_states)} using multiple threads: {time.time() - start:.4f}s')
+        pool = mp.Pool(processes = len(self.chosen_states))
+        results = pool.map(downloadData, self.chosen_states)
+        print(f'API download time for {", ".join(self.chosen_states)} using multiple processes: {time.time() - start:.4f}s')
+        raw_data = {k : v for k, v in zip(self.chosen_states, results)}
         for abbr, data in sorted(raw_data.items()) :
             state = self.state_abbrs[abbr]
             self.parks_data[state] = {}
@@ -157,15 +137,7 @@ class MainWindow(tk.Tk) :
                 self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
                 self.parks_data[state][park_name]['url'] = park['url'] 
         self.getChosenParks()
-       
-    
-    def downloadData(self, abbr, raw_data, q) :
-        # no lock needed, dictionary is thread safe for single operation
-        response = requests.get(MainWindow.ENDPOINT, params = {'stateCode' : abbr, 'api_key' : MainWindow.API_KEY}).json()
-        q.put((abbr, response['total']))
-        raw_data[abbr] = response['data']
-        
-    
+         
 
     def getChosenParks(self) :
         '''
@@ -264,7 +236,10 @@ class MainWindow(tk.Tk) :
             self.destroy()
             self.quit()
             
+def downloadData(abbr) :
+    return requests.get(MainWindow.ENDPOINT, params = {'stateCode' : abbr, 'api_key' : MainWindow.API_KEY}).json()['data']
         
+
 if __name__ == '__main__' :
     MainWindow().mainloop()
     
