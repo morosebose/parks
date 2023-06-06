@@ -1,7 +1,7 @@
 '''
 CIS 41B Spring 2023
 Surajit A. Bose
-Lab 4 Single Thread
+Lab 4 Serial
 '''
 
 import requests
@@ -33,6 +33,7 @@ class MainWindow(tk.Tk) :
             - middle label 
             - listbox
             - button
+            - bottom label text
             - bottom label
         
         Other instance attributes:
@@ -69,9 +70,9 @@ class MainWindow(tk.Tk) :
         sb = tk.Scrollbar(frame, orient = 'vertical')
         self.lb = tk.Listbox(frame, height = 10, width = 50, selectmode = 'multiple', yscrollcommand = sb.set)
         sb.config(command = self.lb.yview)
-        for val in self.state_abbrs.values() :
-            self.lb.insert(tk.END, val)
         self.lb.grid(row = 0, column = 0)
+        for val in self.state_abbrs.values():  
+            self.lb.insert(tk.END, val)
         sb.grid(row = 0, column = 1, sticky = 'NS')
         
         frame.grid(row = 2, column = 0, columnspan = 3, padx = 10, pady = 10)
@@ -79,7 +80,9 @@ class MainWindow(tk.Tk) :
         self.btn = tk.Button(self, text = 'Submit Choice', command = self.getValidStateChoice)
         self.btn.grid(row = 3, column = 1, padx = 5, pady = 5)
         
-        self.btm_label = tk.Label(self, text = '')
+        self.btm_text = tk.StringVar()
+        self.btm_text.set('')
+        self.btm_label = tk.Label(self, text = self.btm_text.get())
         self.btm_label.grid(row = 4, column = 1, pady = 5)
 
     
@@ -104,6 +107,7 @@ class MainWindow(tk.Tk) :
         '''
         Download, parse, and save the data for all the parks in the states chosen by the user.
         Get info about all national parks in the selected states via call to NPS API.
+        If any state has no national parks, display error message for that state.
         Store parks info for the selected states in the following data structure.
         The data structure is a dictionary of dictionaries of dictionaries.
             - A dictionary where the key is the states
@@ -116,7 +120,8 @@ class MainWindow(tk.Tk) :
                 - the url of the park.       
         After fetching the data, call the method to allow user to choose specific parks.
         '''
-        self.btm_label.config(text = f'Displaying parks in {len(self.chosen_states)} states')
+        how_many = len(self.chosen_states)
+        self.updateBottomLabel(how_many)
         raw_data = {}
         start = time.time()
         for abbr in self.chosen_states :
@@ -125,18 +130,35 @@ class MainWindow(tk.Tk) :
         for abbr, data in raw_data.items() :
             state = self.state_abbrs[abbr]
             self.parks_data[state] = {}
-            for park in data :
-                park_name = park['name']
-                self.parks_data[state][park_name] = {}
-                park_activities = []
-                for activity in park['activities'] :
-                    park_activities.append(activity['name'])
-                self.parks_data[state][park_name]['full name'] = park['fullName'] 
-                self.parks_data[state][park_name]['description'] = park['description'] 
-                self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
-                self.parks_data[state][park_name]['url'] = park['url'] 
+            if data : 
+                for park in data :
+                    park_name = park['name']
+                    self.parks_data[state][park_name] = {}
+                    park_activities = []
+                    for activity in park['activities'] :
+                        park_activities.append(activity['name'])
+                    self.parks_data[state][park_name]['full name'] = park['fullName'] 
+                    self.parks_data[state][park_name]['description'] = park['description'] 
+                    self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
+                    self.parks_data[state][park_name]['url'] = park['url'] 
+            else :       # deal with case where chosen territory, e.g., Palau, has no national parks
+                tkmb.showerror('Error', f'No national parks in {state}', parent = self)
+                how_many -= 1
+                if how_many == 0 :  # if user has chosen no state with a national park, quit the program
+                    tkmb.showerror('Fatal Error', 'No national parks in the chosen territories. Program will exit.', parent = self)
+                    self.destroy()
+                    self.quit()
+                self.updateBottomLabel(how_many)
         self.getChosenParks()
-            
+    
+    
+    def updateBottomLabel(self, how_many)  :
+        display_string =  f'Displaying parks in {how_many} state'
+        if how_many > 1 :
+            display_string += 's'
+        self.btm_text.set(display_string)
+        self.btm_label.config(text = self.btm_text.get())
+  
 
     def getChosenParks(self) :
         '''
@@ -144,10 +166,9 @@ class MainWindow(tk.Tk) :
         Allow user to choose parks.
         Call the method to get the data for just the chosen parks.
         '''
-        self.mid_label.config(text = 'Select parks to save park info to file')
+        self.mid_label.config(text = 'Select one or more parks to save park data to file')
         self.lb.delete(0, tk.END)
         parks_list = []
-        # TODO: Handle case where chosen colony has no national parks
         for k in self.parks_data.keys():
             for key in self.parks_data[k].keys() :
                 tup = (k, key)
@@ -208,15 +229,17 @@ class MainWindow(tk.Tk) :
         '''
         Write out the data for the chosen parks to JSON, one JSON file per state.
         When done, display window telling user the filenames, then quit.
-        
-        # TODO: try/except
         '''
         saved_files = []
         for state in self.chosen_parks :
             filename = f'{state}.json'
-            with open (filename, 'w') as fh:
-                json.dump(self.chosen_parks[state], fh, indent = 4, ensure_ascii = False)
-                saved_files.append(filename)
+            try : 
+                with open (filename, 'w') as fh:
+                    json.dump(self.chosen_parks[state], fh, indent = 4, ensure_ascii = False)
+                    saved_files.append(filename)
+            except IOError :
+                tkmb.showerror('Error', f'Error writing file {filename}. Continuing to next file.', parent = self)
+                continue
         tkmb.showinfo('Saved', f'Saved files: {", ".join(saved_files)}', parent = self)
         self.destroy()
         self.quit()

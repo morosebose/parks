@@ -34,6 +34,7 @@ class MainWindow(tk.Tk) :
             - middle label 
             - listbox
             - button
+            - bottom label text
             - bottom label
         
         Other instance attributes:
@@ -80,7 +81,9 @@ class MainWindow(tk.Tk) :
         self.btn = tk.Button(self, text = 'Submit Choice', command = self.getValidStateChoice)
         self.btn.grid(row = 3, column = 1, padx = 5, pady = 5)
         
-        self.btm_label = tk.Label(self, text = '')
+        self.btm_text = tk.StringVar()
+        self.btm_text.set('')
+        self.btm_label = tk.Label(self, text = self.btm_text.get())
         self.btm_label.grid(row = 4, column = 1, pady = 5)
 
     
@@ -104,7 +107,8 @@ class MainWindow(tk.Tk) :
     def getParksData(self) :
         '''
         Download, parse, and save the data for all the parks in the states chosen by the user.
-        Get info about all national parks in the selected states via call to NPS API.
+        Get info about all national parks in the selected states via multiprocess call to NPS API.
+        If any state has no national parks, display error message for that state.
         Store parks info for the selected states in the following data structure.
         The data structure is a dictionary of dictionaries of dictionaries.
             - A dictionary where the key is the states
@@ -117,28 +121,46 @@ class MainWindow(tk.Tk) :
                 - the url of the park.       
         After fetching the data, call the method to allow user to choose specific parks.
         '''
-        self.btm_label.config(text = f'Displaying parks in {len(self.chosen_states)} states')
+        how_many = len(self.chosen_states)
+        self.btm_label.config(text = f'Displaying parks in {how_many} states')
         start = time.time()
-        pool = mp.Pool(processes = len(self.chosen_states))
+        pool = mp.Pool(processes = how_many)
         results = pool.map(downloadData, self.chosen_states)
         print(f'API download time for {", ".join(self.chosen_states)} using multiple processes: {time.time() - start:.4f}s')
         raw_data = {k : v for k, v in zip(self.chosen_states, results)}
         for abbr, data in sorted(raw_data.items()) :
             state = self.state_abbrs[abbr]
             self.parks_data[state] = {}
-            for park in data :
-                park_name = park['name']
-                self.parks_data[state][park_name] = {}
-                park_activities = []
-                for activity in park['activities'] :
-                    park_activities.append(activity['name'])
-                self.parks_data[state][park_name]['full name'] = park['fullName'] 
-                self.parks_data[state][park_name]['description'] = park['description'] 
-                self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
-                self.parks_data[state][park_name]['url'] = park['url'] 
+            if data : 
+                for park in data :
+                    park_name = park['name']
+                    self.parks_data[state][park_name] = {}
+                    park_activities = []
+                    for activity in park['activities'] :
+                        park_activities.append(activity['name'])
+                    self.parks_data[state][park_name]['full name'] = park['fullName'] 
+                    self.parks_data[state][park_name]['description'] = park['description'] 
+                    self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
+                    self.parks_data[state][park_name]['url'] = park['url'] 
+            else :       # deal with case where chosen territory, e.g., Palau, has no national parks
+                tkmb.showerror('Error', f'No national parks in {state}', parent = self)
+                how_many -= 1
+                if how_many == 0 :  # if user has chosen no state with a national park, quit the program
+                    tkmb.showerror('Fatal Error', 'No national parks in the chosen territories. Program will exit.', parent = self)
+                    self.destroy()
+                    self.quit()
+                self.updateBottomLabel(how_many)
         self.getChosenParks()
          
-
+        
+    def updateBottomLabel(self, how_many)  :
+        display_string =  f'Displaying parks in {how_many} state'
+        if how_many > 1 :
+            display_string += 's'
+        self.btm_text.set(display_string)
+        self.btm_label.config(text = self.btm_text.get())
+  
+    
     def getChosenParks(self) :
         '''
         Update window display to show the list of parks.
@@ -148,7 +170,6 @@ class MainWindow(tk.Tk) :
         self.mid_label.config(text = 'Select parks to save park info to file')
         self.lb.delete(0, tk.END)
         parks_list = []
-        # TODO: Handle case where chosen colony has no national parks
         for k in self.parks_data.keys():
             for key in self.parks_data[k].keys() :
                 tup = (k, key)
@@ -158,7 +179,6 @@ class MainWindow(tk.Tk) :
     
   
     def getChosenParksData(self, parks_list) :
-        # TODO: Use threads
         '''
         Save a data structure of just the user's chosen parks.
         
@@ -210,16 +230,17 @@ class MainWindow(tk.Tk) :
         '''
         Write out the data for the chosen parks to JSON, one JSON file per state.
         When done, display window telling user the filenames, then quit.
-        
-        # TODO: try/except
-        # TODO: Use threads
         '''
         saved_files = []
         for state in self.chosen_parks :
             filename = f'{state}.json'
-            with open (filename, 'w') as fh:
-                json.dump(self.chosen_parks[state], fh, indent = 4, ensure_ascii = False)
-                saved_files.append(filename)
+            try : 
+                with open (filename, 'w') as fh:
+                    json.dump(self.chosen_parks[state], fh, indent = 4, ensure_ascii = False)
+                    saved_files.append(filename)
+            except IOError :
+                tkmb.showerror('Error', f'Error writing file {filename}. Continuing to next file.', parent = self)
+                continue
         tkmb.showinfo('Saved', f'Saved files: {", ".join(saved_files)}', parent = self)
         self.destroy()
         self.quit()
@@ -242,4 +263,23 @@ def downloadData(abbr) :
 
 if __name__ == '__main__' :
     MainWindow().mainloop()
-    
+
+'''
+API download time for CA, DE, GU, NY, PW using single thread: 2.4594s
+API download time for CA, DE, GU, NY, PW using multiple processes: 0.8576s
+API download time for CA, DE, GU, NY, PW using multiple threads: 0.7534s
+
+The serial version of the code is the slowest to run. It fetches the API data
+in series, so only one state's data is being pulled at a time.
+
+The multiprocessing code runs considerably faster. Since each state's data is
+being downloaded in parallel, the code is more efficient. 
+
+The multithreaded code is faster still because threads are lightweight and 
+share memory space on the heap. So implementing them is quicker. Data
+transfer between threads and the parent thread is swifter than between 
+processes.Threads have lower overhead. For a quick operation like an API call,
+the overhead of multiprocessing is not worth it. For more complex operations
+that involve lots of data crunching, multiprocessing will likely outperform
+multithreading. 
+'''

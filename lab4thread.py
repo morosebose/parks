@@ -107,7 +107,8 @@ class MainWindow(tk.Tk) :
     def getParksData(self) :
         '''
         Download, parse, and save the data for all the parks in the states chosen by the user.
-        Get info about all national parks in the selected states via call to NPS API.
+        Get info about all national parks in the selected states via threaded call to NPS API.
+        If any state has no national parks, display error message for that state.
         Store parks info for the selected states in the following data structure.
         The data structure is a dictionary of dictionaries of dictionaries.
             - A dictionary where the key is the states
@@ -122,6 +123,7 @@ class MainWindow(tk.Tk) :
         '''
         self.btm_text.set('Results: ')
         self.btm_label.config(text = self.btm_text.get())
+        how_many = len(self.chosen_states)
         q = queue.Queue()
         raw_data = {}
         threads = []
@@ -131,7 +133,7 @@ class MainWindow(tk.Tk) :
             threads.append(t)
             t.start()
         
-        for i in range(len(self.chosen_states)) :
+        for i in range(how_many) :
             label_text = self.btm_text.get()
             qdata = q.get() 
             state = self.state_abbrs[qdata[0]]
@@ -146,25 +148,32 @@ class MainWindow(tk.Tk) :
         for abbr, data in sorted(raw_data.items()) :
             state = self.state_abbrs[abbr]
             self.parks_data[state] = {}
-            for park in data :
-                park_name = park['name']
-                self.parks_data[state][park_name] = {}
-                park_activities = []
-                for activity in park['activities'] :
-                    park_activities.append(activity['name'])
-                self.parks_data[state][park_name]['full name'] = park['fullName'] 
-                self.parks_data[state][park_name]['description'] = park['description'] 
-                self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
-                self.parks_data[state][park_name]['url'] = park['url'] 
-        self.getChosenParks()
+            if data : 
+                for park in data :
+                    park_name = park['name']
+                    self.parks_data[state][park_name] = {}
+                    park_activities = []
+                    for activity in park['activities'] :
+                        park_activities.append(activity['name'])
+                    self.parks_data[state][park_name]['full name'] = park['fullName'] 
+                    self.parks_data[state][park_name]['description'] = park['description'] 
+                    self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
+                    self.parks_data[state][park_name]['url'] = park['url'] 
+            else :       # deal with case where chosen territory, e.g., Palau, has no national parks
+                tkmb.showerror('Error', f'No national parks in {state}', parent = self)
+                how_many -= 1
+                if how_many == 0 :  # if user has chosen no state with a national park, quit the program
+                    tkmb.showerror('Fatal Error', 'No national parks in the chosen territories. Program will exit.', parent = self)
+                    self.destroy()
+                    self.quit()
+            self.getChosenParks()
        
     
     def downloadData(self, abbr, raw_data, q) :
         # no lock needed, dictionary is thread safe for single operation
         response = requests.get(MainWindow.ENDPOINT, params = {'stateCode' : abbr, 'api_key' : MainWindow.API_KEY}).json()
         q.put((abbr, response['total']))
-        raw_data[abbr] = response['data']
-        
+        raw_data[abbr] = response['data']        
     
 
     def getChosenParks(self) :
@@ -176,7 +185,6 @@ class MainWindow(tk.Tk) :
         self.mid_label.config(text = 'Select parks to save park info to file')
         self.lb.delete(0, tk.END)
         parks_list = []
-        # TODO: Handle case where chosen colony has no national parks
         for k in self.parks_data.keys():
             for key in self.parks_data[k].keys() :
                 tup = (k, key)
@@ -186,7 +194,6 @@ class MainWindow(tk.Tk) :
     
   
     def getChosenParksData(self, parks_list) :
-        # TODO: Use threads
         '''
         Save a data structure of just the user's chosen parks.
         
@@ -239,19 +246,22 @@ class MainWindow(tk.Tk) :
         Write out the data for the chosen parks to JSON, one JSON file per state.
         When done, display window telling user the filenames, then quit.
         
-        # TODO: try/except
-        # TODO: Use threads
+        TODO: Use threads
         '''
         saved_files = []
         for state in self.chosen_parks :
             filename = f'{state}.json'
-            with open (filename, 'w') as fh:
-                json.dump(self.chosen_parks[state], fh, indent = 4, ensure_ascii = False)
-                saved_files.append(filename)
+            try : 
+                with open (filename, 'w') as fh:
+                    json.dump(self.chosen_parks[state], fh, indent = 4, ensure_ascii = False)
+                    saved_files.append(filename)
+            except IOError :
+                tkmb.showerror('Error', f'Error writing file {filename}. Continuing to next file.', parent = self)
+                continue
         tkmb.showinfo('Saved', f'Saved files: {", ".join(saved_files)}', parent = self)
         self.destroy()
-        self.quit()
-     
+        self.quit()    
+   
         
     def closeout(self) :
         '''
