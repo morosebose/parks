@@ -34,7 +34,6 @@ class MainWindow(tk.Tk) :
             - middle label 
             - listbox
             - button
-            - bottom label text
             - bottom label
         
         Other instance attributes:
@@ -81,9 +80,7 @@ class MainWindow(tk.Tk) :
         self.btn = tk.Button(self, text = 'Submit Choice', command = self.getValidStateChoice)
         self.btn.grid(row = 3, column = 1, padx = 5, pady = 5)
         
-        self.btm_text = tk.StringVar()
-        self.btm_text.set('')
-        self.btm_label = tk.Label(self, text = self.btm_text.get())
+        self.btm_label = tk.Label(self, text = '')
         self.btm_label.grid(row = 4, column = 1, pady = 5)
 
     
@@ -122,7 +119,6 @@ class MainWindow(tk.Tk) :
         After fetching the data, call the method to allow user to choose specific parks.
         '''
         how_many = len(self.chosen_states)
-        self.btm_label.config(text = f'Displaying parks in {how_many} states')
         start = time.time()
         pool = mp.Pool(processes = how_many)
         results = pool.map(downloadData, self.chosen_states)
@@ -131,35 +127,34 @@ class MainWindow(tk.Tk) :
         for abbr, data in sorted(raw_data.items()) :
             state = self.state_abbrs[abbr]
             self.parks_data[state] = {}
-            if data : 
-                for park in data :
-                    park_name = park['name']
-                    self.parks_data[state][park_name] = {}
-                    park_activities = []
-                    for activity in park['activities'] :
-                        park_activities.append(activity['name'])
-                    self.parks_data[state][park_name]['full name'] = park['fullName'] 
-                    self.parks_data[state][park_name]['description'] = park['description'] 
-                    self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
-                    self.parks_data[state][park_name]['url'] = park['url'] 
-            else :       # deal with case where chosen territory, e.g., Palau, has no national parks
+            if not data :           # special case where chosen territory, e.g., Palau, has no national parks
                 tkmb.showerror('Error', f'No national parks in {state}', parent = self)
                 how_many -= 1
                 if how_many == 0 :  # if user has chosen no state with a national park, quit the program
-                    tkmb.showerror('Fatal Error', 'No national parks in the chosen territories. Program will exit.', parent = self)
+                    tkmb.showerror('Fatal Error', 'No national parks in the chosen areas. Program will exit.', parent = self)
                     self.destroy()
                     self.quit()
-                self.updateBottomLabel(how_many)
-        self.getChosenParks()
+                    self.updateBottomLabel(how_many)
+            for park in data :      # general case
+                park_name = park['name']
+                self.parks_data[state][park_name] = {}
+                park_activities = []
+                for activity in park['activities'] :
+                    park_activities.append(activity['name'])
+                self.parks_data[state][park_name]['full name'] = park['fullName'] 
+                self.parks_data[state][park_name]['description'] = park['description'] 
+                self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
+                self.parks_data[state][park_name]['url'] = park['url'] 
+        self.updateBottomLabel(how_many)
          
         
     def updateBottomLabel(self, how_many)  :
-        display_string =  f'Displaying parks in {how_many} state'
-        if how_many > 1 :
-            display_string += 's'
-        self.btm_text.set(display_string)
-        self.btm_label.config(text = self.btm_text.get())
-  
+        display_string =  f'Displaying parks in {how_many} states'
+        if how_many == 1 :
+            display_string = display_string[:-1]
+        self.btm_label.config(text = display_string)
+        self.getChosenParks()
+    
     
     def getChosenParks(self) :
         '''
@@ -252,7 +247,7 @@ class MainWindow(tk.Tk) :
         - If user confirms, close and quit gracefully
         - If user cancels, do nothing
         '''        
-        close = tkmb.askokcancel('Confirm close', 'Close all windows and quit?', parent = self)
+        close = tkmb.askokcancel('Confirm exit', 'Close all windows and quit?', parent = self)
         if close: 
             self.destroy()
             self.quit()
