@@ -115,7 +115,7 @@ class MainWindow(tk.Tk) :
                 - a description of the park
                 - a string that specifies the activities available in the park
                 - the url of the park.       
-        After fetching the data, call the method to allow user to choose specific parks.
+        After fetching the data, call the method to update the bottom label.
         '''
         how_many = len(self.chosen_states)
         raw_data = {}
@@ -147,6 +147,10 @@ class MainWindow(tk.Tk) :
     
     
     def updateBottomLabel(self, how_many)  :
+        '''
+        Update the bottom label to show how many states' parks are shown.
+        After updating the label, call the method to allow user to choose specific parks.
+        '''
         display_string =  f'Displaying parks in {how_many} states'
         if how_many == 1 :
             display_string = display_string[:-1]

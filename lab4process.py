@@ -116,7 +116,7 @@ class MainWindow(tk.Tk) :
                 - a description of the park
                 - a string that specifies the activities available in the park
                 - the url of the park.       
-        After fetching the data, call the method to allow user to choose specific parks.
+        After fetching the data, call the method to update the bottom label.
         '''
         how_many = len(self.chosen_states)
         start = time.time()
@@ -149,6 +149,10 @@ class MainWindow(tk.Tk) :
          
         
     def updateBottomLabel(self, how_many)  :
+        '''
+        Update the bottom label to show how many states' parks are shown.
+        After updating the label, call the method to allow user to choose specific parks.
+        '''
         display_string =  f'Displaying parks in {how_many} states'
         if how_many == 1 :
             display_string = display_string[:-1]
@@ -273,7 +277,7 @@ being downloaded in parallel, the code is more efficient.
 The multithreaded code is faster still because threads are lightweight and 
 share memory space on the heap. So implementing them is quicker. Data
 transfer between threads and the parent thread is swifter than between 
-processes.Threads have lower overhead. For a quick operation like an API call,
+processes. Threads have lower overhead. For a quick operation like an API call,
 the overhead of multiprocessing is not worth it. For more complex operations
 that involve lots of data crunching, multiprocessing will likely outperform
 multithreading. 

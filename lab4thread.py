@@ -81,9 +81,7 @@ class MainWindow(tk.Tk) :
         self.btn = tk.Button(self, text = 'Submit Choice', command = self.getValidStateChoice)
         self.btn.grid(row = 3, column = 1, padx = 5, pady = 5)
         
-        self.btm_text = tk.StringVar()
-        self.btm_text.set('')
-        self.btm_label = tk.Label(self, text = self.btm_text.get())
+        self.btm_label = tk.Label(self, text = '')
         self.btm_label.grid(row = 4, column = 1, pady = 5)
 
     
@@ -121,8 +119,8 @@ class MainWindow(tk.Tk) :
                 - the url of the park.       
         After fetching the data, call the method to allow user to choose specific parks.
         '''
-        self.btm_text.set('Results: ')
-        self.btm_label.config(text = self.btm_text.get())
+        label_text = 'Received: '
+        self.btm_label.config(text = label_text)
         how_many = len(self.chosen_states)
         q = queue.Queue()
         raw_data = {}
@@ -134,13 +132,11 @@ class MainWindow(tk.Tk) :
             t.start()
         
         for i in range(how_many) :
-            label_text = self.btm_text.get()
             qdata = q.get() 
             state = self.state_abbrs[qdata[0]]
             total = qdata[1]
             label_text += (f' {state}: {total} ')
-            self.btm_text.set(label_text)
-            self.btm_label.config(text = self.btm_text.get())
+            self.btm_label.config(text = label_text)
             
         for t in threads:
             t.join()
@@ -148,24 +144,23 @@ class MainWindow(tk.Tk) :
         for abbr, data in sorted(raw_data.items()) :
             state = self.state_abbrs[abbr]
             self.parks_data[state] = {}
-            if data : 
-                for park in data :
-                    park_name = park['name']
-                    self.parks_data[state][park_name] = {}
-                    park_activities = []
-                    for activity in park['activities'] :
-                        park_activities.append(activity['name'])
-                    self.parks_data[state][park_name]['full name'] = park['fullName'] 
-                    self.parks_data[state][park_name]['description'] = park['description'] 
-                    self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
-                    self.parks_data[state][park_name]['url'] = park['url'] 
-            else :       # deal with case where chosen territory, e.g., Palau, has no national parks
+            if not data :           # special case where chosen territory, e.g., Palau, has no national parks
                 tkmb.showerror('Error', f'No national parks in {state}', parent = self)
                 how_many -= 1
                 if how_many == 0 :  # if user has chosen no state with a national park, quit the program
                     tkmb.showerror('Fatal Error', 'No national parks in the chosen territories. Program will exit.', parent = self)
                     self.destroy()
                     self.quit()
+            for park in data :      # general case
+                park_name = park['name']
+                self.parks_data[state][park_name] = {}
+                park_activities = []
+                for activity in park['activities'] :
+                    park_activities.append(activity['name'])
+                self.parks_data[state][park_name]['full name'] = park['fullName'] 
+                self.parks_data[state][park_name]['description'] = park['description'] 
+                self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
+                self.parks_data[state][park_name]['url'] = park['url'] 
             self.getChosenParks()
        
     
