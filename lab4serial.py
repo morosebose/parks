@@ -126,23 +126,24 @@ class MainWindow(tk.Tk) :
         for abbr, data in raw_data.items() :
             state = self.state_abbrs[abbr]
             self.parks_data[state] = {}
-            if not data :               # special case where chosen territory, e.g., Palau, has no national parks
+            if data :       # general case      
+                for park in data :          
+                    park_name = park['name']
+                    self.parks_data[state][park_name] = {}
+                    park_activities = []
+                    for activity in park['activities'] :
+                        park_activities.append(activity['name'])
+                    self.parks_data[state][park_name]['full name'] = park['fullName'] 
+                    self.parks_data[state][park_name]['description'] = park['description'] 
+                    self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
+                    self.parks_data[state][park_name]['url'] = park['url']  
+            else:           # special case where chosen territory, e.g., Palau, has no national parks
                 tkmb.showerror('Error', f'No national parks in {state}', parent = self)
                 how_many -= 1
                 if how_many == 0 :      # if user has chosen no state with a national park, quit the program
                     tkmb.showerror('Fatal Error', 'No national parks in the chosen areas. Program will exit.', parent = self)
                     self.destroy()
                     self.quit()
-            for park in data :          # general case
-                park_name = park['name']
-                self.parks_data[state][park_name] = {}
-                park_activities = []
-                for activity in park['activities'] :
-                    park_activities.append(activity['name'])
-                self.parks_data[state][park_name]['full name'] = park['fullName'] 
-                self.parks_data[state][park_name]['description'] = park['description'] 
-                self.parks_data[state][park_name]['activities'] = ', '.join(park_activities)
-                self.parks_data[state][park_name]['url'] = park['url']  
         self.updateBottomLabel(how_many)
     
     
