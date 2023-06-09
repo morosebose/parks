@@ -248,7 +248,7 @@ class MainWindow(tk.Tk) :
         for state in self.chosen_parks :
             filename = f'{state}.json'
             try : 
-                with open (filename, 'w') as fh:
+                with open (filename, 'w', encoding = 'utf-8') as fh:
                     json.dump(self.chosen_parks[state], fh, indent = 4, ensure_ascii = False)
                     saved_files.append(filename)
             except IOError :
