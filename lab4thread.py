@@ -137,6 +137,7 @@ class MainWindow(tk.Tk) :
             total = qdata[1]
             label_text += (f' {state}: {total} ')
             self.btm_label.config(text = label_text)
+            self.update()
             
         for t in threads:
             t.join()
